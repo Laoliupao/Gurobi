@@ -425,7 +425,6 @@ for i in N:
             name=f"constraint_48_{i}_{s}"
         )
 
-
 # 约束 (50)：k >= 0
 # 已经在 addVars 中通过 lb=0 强制执行，无需额外添加
 
