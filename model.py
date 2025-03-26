@@ -438,3 +438,4 @@ for i in N:
             
 
 # 输出结果
+print("Objective value:")
