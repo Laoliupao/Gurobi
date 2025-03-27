@@ -1,19 +1,23 @@
 from gurobipy import Model, GRB
 from read_data import Parameters
+from gurobipy import quicksum
+
 # 创建 Gurobi 模型
 model = Model("BikeSharingOptimization")
 
 # 使用 for 循环生成集合
-V = [v for v in range(0, 3)]  # 所有工作者的集合，0到2
-N = [n for n in range(3, 12)]  # 共享单车站点的集合，3到12
-F = [f for f in range(12, 15)]  # 收集中心的集合，12到14
+V = [v for v in range(-4, 0)]  # 工人集合,-4到-1
+N = [n for n in range(0,10)]  # 站点集合，0到9
+print(N)
+F = [f for f in range(10, 13)]  # 维修中心集合，10到12
+
 
 # 使用 for 循环生成字典
 # 手动定义每个 f 的虚拟节点数量
-nodes_per_f = {12: 3, 13: 3, 14: 3}
+nodes_per_f = {10: 3, 11: 3, 12: 3}
 
 # 将 Fai 定义为一个二维数组（列表的列表）
-base_node = len(N) + len(F)  # 起始编号
+base_node = len(N) + len(F)   # 起始编号
 print(base_node)
 
 FAI = []  # 存储生成的虚拟节点集合
@@ -30,14 +34,14 @@ print("FAI:", FAI)
 # 定义 N_START，接着 FAI 的最后一个编号继续编号
 N_START = [current_node + i for i in range(len(V))]  # 生成 N_START 的编号
 current_node += len(V)  # 更新当前编号
-
+print('N_start')
+print(N_START)
 # 定义 N_END
 N_END = [current_node + i for i in range(len(V))]  # 生成 N_END 的编号
 current_node += len(V)  # 更新当前编号
 
 # 定义 N_ALL，将所有节点集合合并
-N_ALL =  N # 先加入基本集合 N, F
-
+N_ALL = N.copy()  # 创建 N 的独立副本
 # 将 Fai 中的所有虚拟节点加入（Fai 是一个二维列表，需要展平）
 for FAI_nodes in FAI:
     N_ALL.extend(FAI_nodes)
@@ -47,7 +51,7 @@ N_ALL.extend(N_START)
 N_ALL.extend(N_END)
 
 # 输出 N_ALL
-print("N_ALL:", N_ALL)
+# print("N_ALL:", N_ALL)
 
 
 # 展平二维虚拟节点集合FAI
@@ -59,16 +63,19 @@ j_sources = N + FAI_FLAT + N_END    # 终止节点集合
 # 修改A的生成方式（自动去重）
 A = list({(i, j) for i in i_sources for j in j_sources if i != j})
 
-S = [s for s in range(0, 23)]  # 所有时间段，0到23
+S = [s for s in range(31, 71)]  # 所有时间段，31到70
 
 
 # 创建参数对象
 params = Parameters()
 # 设置默认值
 params.set_default_values()
+# 加载距离矩阵（假设有一个名为'增广距离矩阵-10站点.csv'的文件）
+params.load_distance_matrix("增广距离矩阵-10站点.csv")
+# 加载需求矩阵（假设有一个名为'demand.csv'的文件）
+params.load_demand_matrix("各时段累计需求-10站点.csv")
 # 打印参数
-params.print_parameters()
-
+# params.print_parameters()
 
 #创建变量
 X = [(i, j, v) for (i, j) in A for v in V]
@@ -78,7 +85,7 @@ THETA = [i for i in FAI_FLAT]
 EPSILON = [i for i in FAI_FLAT]
 DELTA = [i for i in N]
 TAO = [i for i in N_ALL]
-ETA = [(i,j) for (i, j) in A]
+ETA = [(i,j) for i in FAI_FLAT for j in FAI_FLAT]
 LAMDA = [(i,s) for i in N for s in S]
 
 x_ijv = model.addVars(X, vtype=GRB.BINARY, name='x_ijv') 
@@ -94,7 +101,7 @@ lamda_is = model.addVars(LAMDA, vtype=GRB.BINARY, name='lamda_is')
 # 添加约束
 # 式2（约束1）
 for v in V:
-    n_start_v = N_START[v]
+    n_start_v = N_START[v - V[0]]
     # 获取所有以 n_start_v 为起始节点的边
     edges_for_v = [(i, j) for (i, j) in A if i == n_start_v]
     model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_for_v) <= 1)
@@ -102,7 +109,7 @@ for v in V:
 # 式3 约束2
 for v in V:
     # 获取当前工作者的起始节点
-    n_start_v = N_START[v]
+    n_start_v = N_START[v - V[0]]
     
     # 遍历 N_START 中除 n_start_v 以外的所有节点
     for i in set(N_START) - {n_start_v}:
@@ -115,7 +122,7 @@ for v in V:
 # 式4 约束3
 for v in V:
     # 获取当前工作者的终点节点
-    n_end_v = N_END[v]
+    n_end_v = N_END[v - V[0]]
     
     # 找到所有以 n_end_v 为终点的边 (i, n_end_v) ∈ A
     edges_to_n_end_v = [(i, j) for (i, j) in A if j == n_end_v]
@@ -125,7 +132,7 @@ for v in V:
 
 # 式5 约束4
 for v in V:
-    n_end_v = N_END[v]  # 获取工作者 v 的终止节点
+    n_end_v = N_END[v - V[0]]  # 获取工作者 v 的终止节点
     # 遍历 NEND 中除 n_end_v 外的所有节点 j
     for j in N_END:
         if j != n_end_v:  # 排除工作者 v 的终止节点
@@ -175,7 +182,7 @@ for f in F:  # 遍历每个收集中心 f ∈ F
 
 # 式10 约束9
 for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
-    if i in N:  # 确保 i ∈ N^*
+    if i in N:  # 确保 i ∈ N
         # 计算左侧表达式
         left_hand_side = (
             tao_i[i] +
@@ -279,24 +286,24 @@ for f in F:  # 遍历每个收集中心 f ∈ F
 for i in N:  # 遍历每个共享单车站点 i ∈ N
     model.addConstr(delta_i[i] <= params.q_i[i])
 
-# 式22 约束21
-for f in F:  # 遍历每个收集中心 f ∈ F
-    # 获取 f 对应的虚拟节点集合 B_f
-    B_f = FAI[F.index(f)]
-    for j in B_f:  # 遍历每个虚拟节点 j ∈ B_f
-        model.addConstr(params.h_i[f] + sum((theta_i[i] - epsilon_i[i]) * eta_ij[i, j] for i in B_f if i !=j) <= params.Q_f[f])
+# # 式22 约束21
+# for f in F:  # 遍历每个收集中心 f ∈ F
+#     # 获取 f 对应的虚拟节点集合 B_f
+#     B_f = FAI[F.index(f)]
+#     for j in B_f:  # 遍历每个虚拟节点 j ∈ B_f
+#         model.addConstr(params.h_i[f] + sum((theta_i[i] - epsilon_i[i]) * eta_ij[i, j] for i in B_f if i !=j) <= params.Q_f[f])
 
 # 式23 约束22
 for i in FAI_FLAT:  # 遍历每个虚拟节点 i ∈ Φ
     for j in FAI_FLAT:  # 遍历每个虚拟节点 j ∈ Φ
         # 约束：τ_i ≤ τ_j + M (1 - n_{i j})
-        model.addConstr(tao_i[i] <= tao_i[j] + params.M * (1 - eta_ij[i, j]),)
+        model.addConstr(tao_i[i] <= tao_i[j] + params.M * (1 - eta_ij[i, j]))
 
 # 式24 约束23
 for i in FAI_FLAT:  # 遍历每个虚拟节点 i ∈ Φ
     for j in FAI_FLAT:  # 遍历每个虚拟节点 j ∈ Φ
         # 约束：τ_j ≤ τ_i + M n_{i j}
-        model.addConstr(tao_i[j] <= tao_i[i] + params.M * eta_ij[i, j],)
+        model.addConstr(tao_i[j] <= tao_i[i] + params.M * eta_ij[i, j])
 
 
 
@@ -428,14 +435,182 @@ for i in N:
 # 约束 (50)：k >= 0
 # 已经在 addVars 中通过 lb=0 强制执行，无需额外添加
 
+
 # 定义目标函数
-       
+# 第一部分：∑_{i∈N} ∑_{s∈S} α_is * λ_is * (δ_i + h_i)
+term1 = quicksum(
+    params.afa_i_s[i, s] * lamda_is[i, s] * (delta_i[i] + params.h_i[i])
+    for i in N
+    for s in S
+)
+
+# 第二部分：∑_{i∈N} ∑_{s∈S} β_is * λ_is * (p_i + q_i)
+term2 = quicksum(
+    params.bta_i_s[i, s] * lamda_is[i, s] * (params.p_i[i] + params.q_i[i])
+    for i in N
+    for s in S
+)
+
+# 第三部分：-∑_{i∈N} c_p^m * (p_i + q_i - δ_i)
+term3 = -quicksum(
+    params.cpm * (params.p_i[i] + params.q_i[i] - delta_i[i])
+    for i in N
+)
+
+# 第四部分：-∑_{i∈N} c_q^m * δ_i
+term4 = -quicksum(
+    params.cqm * delta_i[i]
+    for i in N
+)
+
+# 第五部分：-∑_{v∈V} ∑_{(i,j)∈A} c_{(i,j)}^r * x_{(i,j)}^v
+term5 = -quicksum(
+    params.c[i, j] * x_ijv[i, j, v]
+    for v in V
+    for (i, j) in A
+)
+
+# 总目标函数 F
+objective = term1 + term2 + term3 + term4 + term5
+
+# 设置目标函数（最小化）
+model.setObjective(objective, GRB.MINIMIZE)
 
 # 设置求解参数
-            
+model.setParam('OutputFlag', 1)  # 输出求解过程
+model.setParam('TimeLimit', 3600)  # 设置最大求解时间（单位：秒）  
 
 # 求解模型
-            
+model.optimize()     
 
-# 输出结果
-print("Objective value:")
+# 输出求解结果
+# 1. 基本求解结果
+if model.status == GRB.OPTIMAL:
+    print("最优解已找到！")
+    print("目标函数值:", model.objVal)
+elif model.status == GRB.INFEASIBLE:
+    print("模型无解（不可行）。")
+    # 计算不可行性原因
+    model.computeIIS()
+    model.write("model.ilp")
+    print("不可行约束已写入 'model.ilp' 文件，请查看。")
+elif model.status == GRB.UNBOUNDED:
+    print("模型无界。")
+elif model.status == GRB.TIME_LIMIT:
+    print("达到时间限制，求解未完成。")
+    if model.SolCount > 0:
+        print("找到的可行解目标值:", model.objVal)
+else:
+    print("求解状态:", model.status)
+
+# 2. 输出变量值
+if model.status == GRB.OPTIMAL or model.SolCount > 0:
+    print("\n变量值（仅输出非零值）：")
+    for v in model.getVars():
+        if abs(v.x) > 1e-6:  # 只输出非零值（避免浮点误差）
+            print(f"{v.varName} = {v.x}")
+
+    # 单独输出 x_ijv 变量（路径选择变量）
+    print("\nx_ijv 变量值（仅输出非零值）：")
+    for (i, j, v) in X:
+        if abs(x_ijv[i, j, v].x) > 1e-6:
+            print(f"x_ijv[{i},{j},{v}] = {x_ijv[i, j, v].x}")
+
+    # 单独输出 delta_i 变量（站点调整量）
+    print("\ndelta_i 变量值（仅输出非零值）：")
+    for i in N:
+        if abs(delta_i[i].x) > 1e-6:
+            print(f"delta_i[{i}] = {delta_i[i].x}")
+
+    # 单独输出 tao_i 变量（到达时间）
+    print("\ntao_i 变量值（仅输出非零值）：")
+    for i in N_ALL:
+        if abs(tao_i[i].x) > 1e-6:
+            print(f"tao_i[{i}] = {tao_i[i].x}")
+
+    # 3. 输出约束的松弛值
+    print("\n约束的松弛值（仅输出非零值）：")
+    for constr in model.getConstrs():
+        slack = constr.getAttr('Slack')
+        if abs(slack) > 1e-6:
+            print(f"约束 {constr.ConstrName}: 松弛值 = {slack}")
+
+    # 4. 输出目标函数各部分的值
+    term1_value = sum(
+        params.afa_i_s[i, s] * lamda_is[i, s].x * (delta_i[i].x + params.h_i[i])
+        for i in N
+        for s in S
+    )
+    term2_value = sum(
+        params.bta_i_s[i, s] * lamda_is[i, s].x * (params.p_i[i] + params.q_i[i])
+        for i in N
+        for s in S
+    )
+    term3_value = -sum(
+        params.cpm * (params.p_i[i] + params.q_i[i] - delta_i[i].x)
+        for i in N
+    )
+    term4_value = -sum(
+        params.cqm * delta_i[i].x
+        for i in N
+    )
+    term5_value = -sum(
+        params.c[i, j] * x_ijv[i, j, v].x
+        for v in V
+        for (i, j) in A
+    )
+
+    print("\n目标函数各部分值：")
+    print(f"term1 (α_is * λ_is * (δ_i + h_i)) = {term1_value}")
+    print(f"term2 (β_is * λ_is * (p_i + q_i)) = {term2_value}")
+    print(f"term3 (-c_p^m * (p_i + q_i - δ_i)) = {term3_value}")
+    print(f"term4 (-c_q^m * δ_i) = {term4_value}")
+    print(f"term5 (-c_(i,j)^r * x_(i,j)^v) = {term5_value}")
+    print(f"总目标值: {term1_value + term2_value + term3_value + term4_value + term5_value}")
+
+# 5. 将结果保存到文件
+with open("gurobi_results.txt", "w") as f:
+    f.write("Gurobi 求解结果\n")
+    f.write("================\n")
+    if model.status == GRB.OPTIMAL:
+        f.write("最优解已找到！\n")
+        f.write(f"目标函数值: {model.objVal}\n")
+    else:
+        f.write(f"求解状态: {model.status}\n")
+
+    if model.status == GRB.OPTIMAL or model.SolCount > 0:
+        f.write("\n变量值（仅输出非零值）：\n")
+        for v in model.getVars():
+            if abs(v.x) > 1e-6:
+                f.write(f"{v.varName} = {v.x}\n")
+
+        f.write("\nx_ijv 变量值（仅输出非零值）：\n")
+        for (i, j, v) in X:
+            if abs(x_ijv[i, j, v].x) > 1e-6:
+                f.write(f"x_ijv[{i},{j},{v}] = {x_ijv[i, j, v].x}\n")
+
+        f.write("\ndelta_i 变量值（仅输出非零值）：\n")
+        for i in N:
+            if abs(delta_i[i].x) > 1e-6:
+                f.write(f"delta_i[{i}] = {delta_i[i].x}\n")
+
+        f.write("\ntao_i 变量值（仅输出非零值）：\n")
+        for i in N_ALL:
+            if abs(tao_i[i].x) > 1e-6:
+                f.write(f"tao_i[{i}] = {tao_i[i].x}\n")
+
+        f.write("\n约束的松弛值（仅输出非零值）：\n")
+        for constr in model.getConstrs():
+            slack = constr.getAttr('Slack')
+            if abs(slack) > 1e-6:
+                f.write(f"约束 {constr.ConstrName}: 松弛值 = {slack}\n")
+
+        f.write("\n目标函数各部分值：\n")
+        f.write(f"term1 (α_is * λ_is * (δ_i + h_i)) = {term1_value}\n")
+        f.write(f"term2 (β_is * λ_is * (p_i + q_i)) = {term2_value}\n")
+        f.write(f"term3 (-c_p^m * (p_i + q_i - δ_i)) = {term3_value}\n")
+        f.write(f"term4 (-c_q^m * δ_i) = {term4_value}\n")
+        f.write(f"term5 (-c_(i,j)^r * x_(i,j)^v) = {term5_value}\n")
+        f.write(f"总目标值: {term1_value + term2_value + term3_value + term4_value + term5_value}\n")
+
+print("结果已保存到 'gurobi_results.txt' 文件。")
