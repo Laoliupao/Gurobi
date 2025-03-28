@@ -35,8 +35,8 @@ class Parameters:
         self.sigma_s = 60  # Time length of each time slot
         self.d_f = {10: 15, 11: 15, 12: 15}  # Number of repaired bikes in collection center f
         self.h_i = {0: 15, 1: 10, 2: 5, 3: 10, 4: 8, 5: 6, 6: 5, 7: 3, 8: 2, 9:2}  # Number of repaired bikes to return to station i
-        self.p_i = {0: 15, 1: 10, 2: 5, 3: 10, 4: 8, 5: 6, 6: 5, 7: 3, 8: 2, 9:2}   # Number of broken bikes to return to collection center at station i
-        self.q_i = {0: 15, 1: 10, 2: 5, 3: 10, 4: 8, 5: 6, 6: 5, 7: 3, 8: 2, 9:2}   # Number of broken bikes to repair on the road at station i
+        self.p_i = {0: 15, 1: 10, 2: 5, 3: 10, 4: 8, 5: 6, 6: 5, 7: 3, 8: 2, 9:2}   # Number of broken shared bikes that must be returned to collection centers for repair at station i
+        self.q_i = {0: 15, 1: 10, 2: 5, 3: 10, 4: 8, 5: 6, 6: 5, 7: 3, 8: 2, 9:2}   # Number of broken shared bikes that can be repaired directly on the road at station i
         self.T = 8  # Maximum operating duration
         self.M = 1000000  # A large number
         self.V = 10 # Speed of the worker's truck

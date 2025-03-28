@@ -8,7 +8,6 @@ model = Model("BikeSharingOptimization")
 # 使用 for 循环生成集合
 V = [v for v in range(-4, 0)]  # 工人集合,-4到-1
 N = [n for n in range(0,10)]  # 站点集合，0到9
-print(N)
 F = [f for f in range(10, 13)]  # 维修中心集合，10到12
 
 
@@ -18,7 +17,6 @@ nodes_per_f = {10: 3, 11: 3, 12: 3}
 
 # 将 Fai 定义为一个二维数组（列表的列表）
 base_node = len(N) + len(F)   # 起始编号
-print(base_node)
 
 FAI = []  # 存储生成的虚拟节点集合
 current_node = base_node  # 当前编号
@@ -28,14 +26,10 @@ for f in F:
     FAI.append([current_node + i for i in range(num_nodes)])  # 生成连续的虚拟节点编号
     current_node += num_nodes  # 更新下一个 f 的起始编号
 
-# 输出 Fai
-print("FAI:", FAI)
 
 # 定义 N_START，接着 FAI 的最后一个编号继续编号
 N_START = [current_node + i for i in range(len(V))]  # 生成 N_START 的编号
 current_node += len(V)  # 更新当前编号
-print('N_start')
-print(N_START)
 # 定义 N_END
 N_END = [current_node + i for i in range(len(V))]  # 生成 N_END 的编号
 current_node += len(V)  # 更新当前编号
@@ -64,7 +58,6 @@ j_sources = N + FAI_FLAT + N_END    # 终止节点集合
 A = list({(i, j) for i in i_sources for j in j_sources if i != j})
 
 S = [s for s in range(31, 71)]  # 所有时间段，31到70
-
 
 # 创建参数对象
 params = Parameters()
@@ -261,7 +254,7 @@ for i in N_ALL:  # 遍历所有节点 i ∈ N_all
     model.addConstr(l_ba_i[i] + l_underline_i[i] <= params.Q_v)
 
 # 式18 约束17
-for i in N_START:  # 遍历所有节点 i ∈ N_all
+for i in N_START:  # 遍历所有节点 i ∈ N_start
     model.addConstr(l_ba_i[i] + l_underline_i[i] == 0)
 
 # 式19 约束18
@@ -439,7 +432,7 @@ for i in N:
 # 定义目标函数
 # 第一部分：∑_{i∈N} ∑_{s∈S} α_is * λ_is * (δ_i + h_i)
 term1 = quicksum(
-    params.afa_i_s[i, s] * lamda_is[i, s] * (delta_i[i] + params.h_i[i])
+    params.afa_i_s[i, s] * lamda_is[i, s] * params.h_i[i] + params.afa_i_s[i, s] * params.h_i[i]
     for i in N
     for s in S
 )
@@ -473,8 +466,8 @@ term5 = -quicksum(
 # 总目标函数 F
 objective = term1 + term2 + term3 + term4 + term5
 
-# 设置目标函数（最小化）
-model.setObjective(objective, GRB.MINIMIZE)
+# 设置目标函数（最大化）
+model.setObjective(objective, GRB.MAXIMIZE)
 
 # 设置求解参数
 model.setParam('OutputFlag', 1)  # 输出求解过程
