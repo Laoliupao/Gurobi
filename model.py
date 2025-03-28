@@ -279,29 +279,7 @@ for f in F:  # 遍历每个收集中心 f ∈ F
 for i in N:  # 遍历每个共享单车站点 i ∈ N
     model.addConstr(delta_i[i] <= params.q_i[i])
 
-# # 式22 约束21
-# for f in F:  # 遍历每个收集中心 f ∈ F
-#     # 获取 f 对应的虚拟节点集合 B_f
-#     B_f = FAI[F.index(f)]
-#     for j in B_f:  # 遍历每个虚拟节点 j ∈ B_f
-#         model.addConstr(params.h_i[f] + sum((theta_i[i] - epsilon_i[i]) * eta_ij[i, j] for i in B_f if i !=j) <= params.Q_f[f])
-
-# 式23 约束22
-for i in FAI_FLAT:  # 遍历每个虚拟节点 i ∈ Φ
-    for j in FAI_FLAT:  # 遍历每个虚拟节点 j ∈ Φ
-        # 约束：τ_i ≤ τ_j + M (1 - n_{i j})
-        model.addConstr(tao_i[i] <= tao_i[j] + params.M * (1 - eta_ij[i, j]))
-
-# 式24 约束23
-for i in FAI_FLAT:  # 遍历每个虚拟节点 i ∈ Φ
-    for j in FAI_FLAT:  # 遍历每个虚拟节点 j ∈ Φ
-        # 约束：τ_j ≤ τ_i + M n_{i j}
-        model.addConstr(tao_i[j] <= tao_i[i] + params.M * eta_ij[i, j])
-
-
-
-#以下为线性化（式28-35，替换式22）
-        
+# 线性化式22中的二次项
 # 定义 y_ij 和 z_ij 的 (i, j) 对集合（其中 i, j ∈ FAI_FLAT）
 Y = [(i, j) for i in FAI_FLAT for j in FAI_FLAT if i != j]
 Z = [(i, j) for i in FAI_FLAT for j in FAI_FLAT if i != j]
@@ -333,6 +311,32 @@ for i in FAI_FLAT:
             # z_ij >= epsilon_i - M * (1 - eta_ij)
             model.addConstr(z_ij[i, j] >= epsilon_i[i] - params.M * (1 - eta_ij[i, j]), name=f"z_ij_lower_bound_{i}_{j}")
             # z_ij >= 0（已在 addVars 中通过 lb=0 强制执行）
+
+
+# 式22 约束21
+for f in F:  # 遍历每个收集中心 f ∈ F
+    # 获取 f 对应的虚拟节点集合 B_f
+    B_f = FAI[F.index(f)]
+    for j in B_f:  # 遍历每个虚拟节点 j ∈ B_f
+        for i in B_f:
+            if i != j:
+                model.addConstr(params.d_f[f] + y_ij[i, j] - z_ij[i, j] <= params.Q_f)
+
+# 式23 约束22
+for i in FAI_FLAT:  # 遍历每个虚拟节点 i ∈ Φ
+    for j in FAI_FLAT:  # 遍历每个虚拟节点 j ∈ Φ
+        # 约束：τ_i ≤ τ_j + M (1 - n_{i j})
+        model.addConstr(tao_i[i] <= tao_i[j] + params.M * (1 - eta_ij[i, j]))
+
+# 式24 约束23
+for i in FAI_FLAT:  # 遍历每个虚拟节点 i ∈ Φ
+    for j in FAI_FLAT:  # 遍历每个虚拟节点 j ∈ Φ
+        # 约束：τ_j ≤ τ_i + M n_{i j}
+        model.addConstr(tao_i[j] <= tao_i[i] + params.M * eta_ij[i, j])
+
+
+
+#以下为线性化
 
 # 线性化约束（式25和式26）
 AUXI1 = [(i, s) for i in N for s in S] # 定义辅助变量集合 AUXI1
