@@ -463,20 +463,30 @@ model.setParam('TimeLimit', 3600)  # 设置最大求解时间（单位：秒）
 model.optimize()     
 
 
-# 检查模型状态并生成 IIS（如果不可行）
-if model.status == GRB.INFEASIBLE:
-    print("模型不可行，正在计算 IIS...")
-    model.computeIIS()  # 计算 IIS
-    # 将 IIS 输出为 .ilp 文件
-    model.write("bike_sharing_iis.ilp")
-    print("IIS 已保存至 'bike_sharing_iis.ilp' 文件")
-elif model.status == GRB.OPTIMAL:
-    print("模型已找到最优解")
-    print(f"目标函数值: {model.objVal}")
-elif model.status == GRB.TIME_LIMIT:
-    print("求解达到时间限制")
+# 检查模型是否不可行
+if model.Status == GRB.INFEASIBLE:
+    print("模型不可行，正在计算IIS...")
+    
+    # 计算不可行性不可约子集（IIS）
+    model.computeIIS()
+    
+    # 将IIS输出为.ilp文件
+    model.write("infeasible_model.ilp")
+    print("IIS已保存到文件: infeasible_model.ilp")
+    
+    # 可选：打印不可行约束的详细信息
+    print("\n不可行约束的详细信息：")
+    for c in model.getConstrs():
+        if c.IISConstr:  # 检查约束是否在IIS中
+            print(f"不可行约束: {c.ConstrName}, 表达式: {model.getRow(c)}")
+    
+    # 可选：打印不可行变量的边界
+    print("\n不可行变量的边界：")
+    for v in model.getVars():
+        if v.IISLB or v.IISUB:  # 检查变量是否因边界导致不可行
+            print(f"变量: {v.VarName}, 下界: {v.LB}, 上界: {v.UB}")
 else:
-    print(f"模型状态: {model.status}")
+    print("模型可行或已找到解。")
 
 
 
