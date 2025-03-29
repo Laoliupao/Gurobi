@@ -43,8 +43,7 @@ for FAI_nodes in FAI:
 N_ALL.extend(N_START)
 N_ALL.extend(N_END)
 
-# 输出 N_ALL
-# print("N_ALL:", N_ALL)
+
 
 
 # 展平二维虚拟节点集合FAI
