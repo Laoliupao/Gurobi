@@ -55,7 +55,6 @@ j_sources = N + FAI_FLAT + N_END    # 终止节点集合
 
 # 修改A的生成方式（自动去重）
 A = list({(i, j) for i in i_sources for j in j_sources if i != j})
-
 S = [s for s in range(31, 51)]  # 所有时间段，31到50
 
 # 创建参数对象
@@ -464,134 +463,178 @@ model.setParam('TimeLimit', 3600)  # 设置最大求解时间（单位：秒）
 # 求解模型
 model.optimize()     
 
-# 输出求解结果
-# 1. 基本求解结果
-if model.status == GRB.OPTIMAL:
-    print("最优解已找到！")
-    print("目标函数值:", model.objVal)
-elif model.status == GRB.INFEASIBLE:
-    print("模型无解（不可行）。")
-    # 计算不可行性原因
-    model.computeIIS()
-    model.write("model.ilp")
-    print("不可行约束已写入 'model.ilp' 文件，请查看。")
-elif model.status == GRB.UNBOUNDED:
-    print("模型无界。")
-elif model.status == GRB.TIME_LIMIT:
-    print("达到时间限制，求解未完成。")
-    if model.SolCount > 0:
-        print("找到的可行解目标值:", model.objVal)
-else:
-    print("求解状态:", model.status)
 
-# 2. 输出变量值
-if model.status == GRB.OPTIMAL or model.SolCount > 0:
-    print("\n变量值（仅输出非零值）：")
-    for v in model.getVars():
-        if abs(v.x) > 1e-6:  # 只输出非零值（避免浮点误差）
-            print(f"{v.varName} = {v.x}")
 
-    # 单独输出 x_ijv 变量（路径选择变量）
-    print("\nx_ijv 变量值（仅输出非零值）：")
-    for (i, j, v) in X:
-        if abs(x_ijv[i, j, v].x) > 1e-6:
-            print(f"x_ijv[{i},{j},{v}] = {x_ijv[i, j, v].x}")
+# 打开一个文件用于记录 IIS 分析结果
+with open("infeasibility_analysis.txt", "w", encoding="utf-8") as f:
+    f.write("Gurobi 不可行约束分析结果\n")
+    f.write("==========================\n\n")
 
-    # 单独输出 delta_i 变量（站点调整量）
-    print("\ndelta_i 变量值（仅输出非零值）：")
-    for i in N:
-        if abs(delta_i[i].x) > 1e-6:
-            print(f"delta_i[{i}] = {delta_i[i].x}")
-
-    # 单独输出 tao_i 变量（到达时间）
-    print("\ntao_i 变量值（仅输出非零值）：")
-    for i in N_ALL:
-        if abs(tao_i[i].x) > 1e-6:
-            print(f"tao_i[{i}] = {tao_i[i].x}")
-
-    # 3. 输出约束的松弛值
-    print("\n约束的松弛值（仅输出非零值）：")
-    for constr in model.getConstrs():
-        slack = constr.getAttr('Slack')
-        if abs(slack) > 1e-6:
-            print(f"约束 {constr.ConstrName}: 松弛值 = {slack}")
-
-    # 4. 输出目标函数各部分的值
-    term1_value = sum(
-        params.afa_i_s[i, s] * lamda_is[i, s].x * (delta_i[i].x + params.h_i[i])
-        for i in N
-        for s in S
-    )
-    term2_value = sum(
-        params.bta_i_s[i, s] * lamda_is[i, s].x * (params.p_i[i] + params.q_i[i])
-        for i in N
-        for s in S
-    )
-    term3_value = -sum(
-        params.cpm * (params.p_i[i] + params.q_i[i] - delta_i[i].x)
-        for i in N
-    )
-    term4_value = -sum(
-        params.cqm * delta_i[i].x
-        for i in N
-    )
-    term5_value = -sum(
-        params.c[i, j] * x_ijv[i, j, v].x
-        for v in V
-        for (i, j) in A
-    )
-
-    print("\n目标函数各部分值：")
-    print(f"term1 (α_is * λ_is * (δ_i + h_i)) = {term1_value}")
-    print(f"term2 (β_is * λ_is * (p_i + q_i)) = {term2_value}")
-    print(f"term3 (-c_p^m * (p_i + q_i - δ_i)) = {term3_value}")
-    print(f"term4 (-c_q^m * δ_i) = {term4_value}")
-    print(f"term5 (-c_(i,j)^r * x_(i,j)^v) = {term5_value}")
-    print(f"总目标值: {term1_value + term2_value + term3_value + term4_value + term5_value}")
-
-# 5. 将结果保存到文件
-with open("gurobi_results.txt", "w") as f:
-    f.write("Gurobi 求解结果\n")
-    f.write("================\n")
+    # 1. 输出求解状态
+    f.write("1. 求解状态\n")
+    f.write("------------\n")
     if model.status == GRB.OPTIMAL:
         f.write("最优解已找到！\n")
         f.write(f"目标函数值: {model.objVal}\n")
+    elif model.status == GRB.INFEASIBLE:
+        f.write("模型无解（不可行）。\n")
+        # 计算 IIS 并写入文件
+        f.write("正在计算不可行约束（IIS）...\n")
+        model.computeIIS()  # 计算不可行约束集
+        model.write("model.ilp")  # 将 IIS 写入单独的文件
+        f.write("不可行约束已写入 'model.ilp' 文件。\n")
+        # 读取 model.ilp 文件并将其内容写入 infeasibility_analysis.txt
+        try:
+            with open("model.ilp", "r", encoding="utf-8") as ilp_file:
+                ilp_content = ilp_file.read()
+                f.write("\n不可行约束（IIS）内容：\n")
+                f.write("------------------------\n")
+                f.write(ilp_content)
+                f.write("\n")
+        except Exception as e:
+            f.write(f"无法读取 model.ilp 文件，错误：{str(e)}\n")
+    elif model.status == GRB.UNBOUNDED:
+        f.write("模型无界。\n")
+    elif model.status == GRB.TIME_LIMIT:
+        f.write("达到时间限制，求解未完成。\n")
+        if model.SolCount > 0:
+            f.write(f"找到的可行解目标值: {model.objVal}\n")
     else:
         f.write(f"求解状态: {model.status}\n")
+    f.write("\n")
 
-    if model.status == GRB.OPTIMAL or model.SolCount > 0:
-        f.write("\n变量值（仅输出非零值）：\n")
-        for v in model.getVars():
-            if abs(v.x) > 1e-6:
-                f.write(f"{v.varName} = {v.x}\n")
+print("IIS save to 'infeasibility_analysis.txt'.")
 
-        f.write("\nx_ijv 变量值（仅输出非零值）：\n")
-        for (i, j, v) in X:
-            if abs(x_ijv[i, j, v].x) > 1e-6:
-                f.write(f"x_ijv[{i},{j},{v}] = {x_ijv[i, j, v].x}\n")
 
-        f.write("\ndelta_i 变量值（仅输出非零值）：\n")
-        for i in N:
-            if abs(delta_i[i].x) > 1e-6:
-                f.write(f"delta_i[{i}] = {delta_i[i].x}\n")
 
-        f.write("\ntao_i 变量值（仅输出非零值）：\n")
-        for i in N_ALL:
-            if abs(tao_i[i].x) > 1e-6:
-                f.write(f"tao_i[{i}] = {tao_i[i].x}\n")
+# # 输出求解结果
+# # 1. 基本求解结果
+# if model.status == GRB.OPTIMAL:
+#     print("最优解已找到！")
+#     print("目标函数值:", model.objVal)
+# elif model.status == GRB.INFEASIBLE:
+#     print("模型无解（不可行）。")
+#     # 计算不可行性原因
+#     model.computeIIS()
+#     model.write("model.ilp")
+#     print("不可行约束已写入 'model.ilp' 文件，请查看。")
+# elif model.status == GRB.UNBOUNDED:
+#     print("模型无界。")
+# elif model.status == GRB.TIME_LIMIT:
+#     print("达到时间限制，求解未完成。")
+#     if model.SolCount > 0:
+#         print("找到的可行解目标值:", model.objVal)
+# else:
+#     print("求解状态:", model.status)
 
-        f.write("\n约束的松弛值（仅输出非零值）：\n")
-        for constr in model.getConstrs():
-            slack = constr.getAttr('Slack')
-            if abs(slack) > 1e-6:
-                f.write(f"约束 {constr.ConstrName}: 松弛值 = {slack}\n")
+# # 2. 输出变量值
+# if model.status == GRB.OPTIMAL or model.SolCount > 0:
+#     print("\n变量值（仅输出非零值）：")
+#     for v in model.getVars():
+#         if abs(v.x) > 1e-6:  # 只输出非零值（避免浮点误差）
+#             print(f"{v.varName} = {v.x}")
 
-        f.write("\n目标函数各部分值：\n")
-        f.write(f"term1 (α_is * λ_is * (δ_i + h_i)) = {term1_value}\n")
-        f.write(f"term2 (β_is * λ_is * (p_i + q_i)) = {term2_value}\n")
-        f.write(f"term3 (-c_p^m * (p_i + q_i - δ_i)) = {term3_value}\n")
-        f.write(f"term4 (-c_q^m * δ_i) = {term4_value}\n")
-        f.write(f"term5 (-c_(i,j)^r * x_(i,j)^v) = {term5_value}\n")
-        f.write(f"总目标值: {term1_value + term2_value + term3_value + term4_value + term5_value}\n")
+#     # 单独输出 x_ijv 变量（路径选择变量）
+#     print("\nx_ijv 变量值（仅输出非零值）：")
+#     for (i, j, v) in X:
+#         if abs(x_ijv[i, j, v].x) > 1e-6:
+#             print(f"x_ijv[{i},{j},{v}] = {x_ijv[i, j, v].x}")
 
-print("结果已保存到 'gurobi_results.txt' 文件。")
+#     # 单独输出 delta_i 变量（站点调整量）
+#     print("\ndelta_i 变量值（仅输出非零值）：")
+#     for i in N:
+#         if abs(delta_i[i].x) > 1e-6:
+#             print(f"delta_i[{i}] = {delta_i[i].x}")
+
+#     # 单独输出 tao_i 变量（到达时间）
+#     print("\ntao_i 变量值（仅输出非零值）：")
+#     for i in N_ALL:
+#         if abs(tao_i[i].x) > 1e-6:
+#             print(f"tao_i[{i}] = {tao_i[i].x}")
+
+#     # 3. 输出约束的松弛值
+#     print("\n约束的松弛值（仅输出非零值）：")
+#     for constr in model.getConstrs():
+#         slack = constr.getAttr('Slack')
+#         if abs(slack) > 1e-6:
+#             print(f"约束 {constr.ConstrName}: 松弛值 = {slack}")
+
+#     # 4. 输出目标函数各部分的值
+#     term1_value = sum(
+#         params.afa_i_s[i, s] * lamda_is[i, s].x * (delta_i[i].x + params.h_i[i])
+#         for i in N
+#         for s in S
+#     )
+#     term2_value = sum(
+#         params.bta_i_s[i, s] * lamda_is[i, s].x * (params.p_i[i] + params.q_i[i])
+#         for i in N
+#         for s in S
+#     )
+#     term3_value = -sum(
+#         params.cpm * (params.p_i[i] + params.q_i[i] - delta_i[i].x)
+#         for i in N
+#     )
+#     term4_value = -sum(
+#         params.cqm * delta_i[i].x
+#         for i in N
+#     )
+#     term5_value = -sum(
+#         params.c[i, j] * x_ijv[i, j, v].x
+#         for v in V
+#         for (i, j) in A
+#     )
+
+#     print("\n目标函数各部分值：")
+#     print(f"term1 (α_is * λ_is * (δ_i + h_i)) = {term1_value}")
+#     print(f"term2 (β_is * λ_is * (p_i + q_i)) = {term2_value}")
+#     print(f"term3 (-c_p^m * (p_i + q_i - δ_i)) = {term3_value}")
+#     print(f"term4 (-c_q^m * δ_i) = {term4_value}")
+#     print(f"term5 (-c_(i,j)^r * x_(i,j)^v) = {term5_value}")
+#     print(f"总目标值: {term1_value + term2_value + term3_value + term4_value + term5_value}")
+
+# # 5. 将结果保存到文件
+# with open("gurobi_results.txt", "w") as f:
+#     f.write("Gurobi 求解结果\n")
+#     f.write("================\n")
+#     if model.status == GRB.OPTIMAL:
+#         f.write("最优解已找到！\n")
+#         f.write(f"目标函数值: {model.objVal}\n")
+#     else:
+#         f.write(f"求解状态: {model.status}\n")
+
+#     if model.status == GRB.OPTIMAL or model.SolCount > 0:
+#         f.write("\n变量值（仅输出非零值）：\n")
+#         for v in model.getVars():
+#             if abs(v.x) > 1e-6:
+#                 f.write(f"{v.varName} = {v.x}\n")
+
+#         f.write("\nx_ijv 变量值（仅输出非零值）：\n")
+#         for (i, j, v) in X:
+#             if abs(x_ijv[i, j, v].x) > 1e-6:
+#                 f.write(f"x_ijv[{i},{j},{v}] = {x_ijv[i, j, v].x}\n")
+
+#         f.write("\ndelta_i 变量值（仅输出非零值）：\n")
+#         for i in N:
+#             if abs(delta_i[i].x) > 1e-6:
+#                 f.write(f"delta_i[{i}] = {delta_i[i].x}\n")
+
+#         f.write("\ntao_i 变量值（仅输出非零值）：\n")
+#         for i in N_ALL:
+#             if abs(tao_i[i].x) > 1e-6:
+#                 f.write(f"tao_i[{i}] = {tao_i[i].x}\n")
+
+#         f.write("\n约束的松弛值（仅输出非零值）：\n")
+#         for constr in model.getConstrs():
+#             slack = constr.getAttr('Slack')
+#             if abs(slack) > 1e-6:
+#                 f.write(f"约束 {constr.ConstrName}: 松弛值 = {slack}\n")
+
+#         f.write("\n目标函数各部分值：\n")
+#         f.write(f"term1 (α_is * λ_is * (δ_i + h_i)) = {term1_value}\n")
+#         f.write(f"term2 (β_is * λ_is * (p_i + q_i)) = {term2_value}\n")
+#         f.write(f"term3 (-c_p^m * (p_i + q_i - δ_i)) = {term3_value}\n")
+#         f.write(f"term4 (-c_q^m * δ_i) = {term4_value}\n")
+#         f.write(f"term5 (-c_(i,j)^r * x_(i,j)^v) = {term5_value}\n")
+#         f.write(f"总目标值: {term1_value + term2_value + term3_value + term4_value + term5_value}\n")
+
+# print("结果已保存到 'gurobi_results.txt' 文件。")
