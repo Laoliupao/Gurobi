@@ -90,8 +90,6 @@ tao_i = model.addVars(TAO, vtype=GRB.CONTINUOUS, lb=0, name='tao')
 eta_ij = model.addVars(ETA, vtype=GRB.BINARY, name='eta_ij')    
 lamda_is = model.addVars(LAMDA, vtype=GRB.BINARY, name='lamda_is')
 
-print(N_START)
-
 # 添加约束
 # 式2（约束1）
 for v in V:
