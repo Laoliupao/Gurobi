@@ -465,28 +465,28 @@ model.optimize()
 
 # 检查模型是否不可行
 if model.Status == GRB.INFEASIBLE:
-    print("模型不可行，正在计算IIS...")
+    print("The model is not feasible and IIS is being calculated...")
     
     # 计算不可行性不可约子集（IIS）
     model.computeIIS()
     
     # 将IIS输出为.ilp文件
     model.write("infeasible_model.ilp")
-    print("IIS已保存到文件: infeasible_model.ilp")
+    print("IIS has saved to infeasible_model.ilp")
     
     # 可选：打印不可行约束的详细信息
-    print("\n不可行约束的详细信息：")
+    print("\nDetails of infeasible constraints:")
     for c in model.getConstrs():
         if c.IISConstr:  # 检查约束是否在IIS中
-            print(f"不可行约束: {c.ConstrName}, 表达式: {model.getRow(c)}")
+            print(f"Infeasible constraint: {c.ConstrName}, Expression: {model.getRow(c)}")
     
     # 可选：打印不可行变量的边界
-    print("\n不可行变量的边界：")
+    print("\nBoundaries of infeasible variables:")
     for v in model.getVars():
         if v.IISLB or v.IISUB:  # 检查变量是否因边界导致不可行
-            print(f"变量: {v.VarName}, 下界: {v.LB}, 上界: {v.UB}")
+            print(f"Variable: {v.VarName}, LB: {v.LB}, UB: {v.UB}")
 else:
-    print("模型可行或已找到解。")
+    print("Model is feasible")
 
 
 
