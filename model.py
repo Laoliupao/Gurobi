@@ -463,8 +463,6 @@ model.setParam('TimeLimit', 3600)  # 设置最大求解时间（单位：秒）
 model.optimize()     
 
 
-
-
 # 检查模型状态并生成 IIS（如果不可行）
 if model.status == GRB.INFEASIBLE:
     print("模型不可行，正在计算 IIS...")
