@@ -26,7 +26,6 @@ for f in F:
     FAI.append([current_node + i for i in range(num_nodes)])  # 生成连续的虚拟节点编号
     current_node += num_nodes  # 更新下一个 f 的起始编号
 
-
 # 定义 N_START，接着 FAI 的最后一个编号继续编号
 N_START = [current_node + i for i in range(len(V))]  # 生成 N_START 的编号
 current_node += len(V)  # 更新当前编号
@@ -57,7 +56,7 @@ j_sources = N + FAI_FLAT + N_END    # 终止节点集合
 # 修改A的生成方式（自动去重）
 A = list({(i, j) for i in i_sources for j in j_sources if i != j})
 
-S = [s for s in range(31, 71)]  # 所有时间段，31到70
+S = [s for s in range(31, 51)]  # 所有时间段，31到50
 
 # 创建参数对象
 params = Parameters()
@@ -91,13 +90,15 @@ tao_i = model.addVars(TAO, vtype=GRB.CONTINUOUS, lb=0, name='tao')
 eta_ij = model.addVars(ETA, vtype=GRB.BINARY, name='eta_ij')    
 lamda_is = model.addVars(LAMDA, vtype=GRB.BINARY, name='lamda_is')
 
+print(N_START)
+
 # 添加约束
 # 式2（约束1）
 for v in V:
     n_start_v = N_START[v - V[0]]
     # 获取所有以 n_start_v 为起始节点的边
     edges_for_v = [(i, j) for (i, j) in A if i == n_start_v]
-    model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_for_v) <= 1)
+    model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_for_v) <= 1,name=f'constraint1_{v}')
 
 # 式3 约束2
 for v in V:
@@ -110,7 +111,7 @@ for v in V:
         edges_from_i = [(i, j) for (i_j, j) in A if i_j == i]
         
         # 添加约束：x_{(i,j)}^v 的和为 0
-        model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_from_i) == 0)
+        model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_from_i) == 0, name = f'constraint2_{i}_{v}')
 
 # 式4 约束3
 for v in V:
@@ -121,7 +122,7 @@ for v in V:
     edges_to_n_end_v = [(i, j) for (i, j) in A if j == n_end_v]
     
     # 添加约束：x_{(i, n_end_v)}^v 的和不超过 1
-    model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_to_n_end_v) <= 1)
+    model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_to_n_end_v) <= 1, name = f'constraint3_{v}')
 
 # 式5 约束4
 for v in V:
@@ -130,7 +131,7 @@ for v in V:
     for j in N_END:
         if j != n_end_v:  # 排除工作者 v 的终止节点
             # 对所有满足 (i, j) in A 的 i，求和 x_{(i,j)}^v
-            model.addConstr(sum(x_ijv[i, j, v] for (i, j_arc) in A if j_arc == j) == 0)
+            model.addConstr(sum(x_ijv[i, j, v] for (i, j_arc) in A if j_arc == j) == 0, name = f'constraint4_{v}_{j}')
 
 # 式6 约束5
 for i in N:
@@ -138,7 +139,7 @@ for i in N:
     edges_from_i = [(i, j) for (i_j, j) in A if i_j == i]
     
     # 添加约束：对于每个节点 i，x_{(i,j)}^v 的和等于 1
-    model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_from_i for v in V) == 1)
+    model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_from_i for v in V) == 1, name = f'constraint5_{i}')
 
 # 式7 约束6
 for i in FAI_FLAT:  # 遍历每个节点 i ∈ Φ
@@ -146,7 +147,7 @@ for i in FAI_FLAT:  # 遍历每个节点 i ∈ Φ
     edges_from_i = [(i, j) for (i_j, j) in A if i_j == i]
     
     # 添加约束：对于每个节点 i，x^{(\nu)}_{(i,j)} 的和不超过 1
-    model.addConstr(sum(x_ijv[i, j, nu] for (i, j) in edges_from_i for nu in V) <= 1, name=f"constraint_i{i}")
+    model.addConstr(sum(x_ijv[i, j, nu] for (i, j) in edges_from_i for nu in V) <= 1, name = f'constraint6_{i}')
 
 # 式8 约束7
 for i in N + FAI_FLAT:  # 遍历每个节点 i ∈ N ∪ Φ
@@ -158,7 +159,7 @@ for i in N + FAI_FLAT:  # 遍历每个节点 i ∈ N ∪ Φ
         edges_from_i = [(i, j) for (i_j, j) in A if i_j == i]
         
         # 添加约束：x^v_{(j,i)} 的和等于 x^v_{(i,j)} 的和
-        model.addConstr(sum(x_ijv[j, i, v] for (j, i) in edges_to_i) == sum(x_ijv[i, j, v] for (i, j) in edges_from_i))
+        model.addConstr(sum(x_ijv[j, i, v] for (j, i) in edges_to_i) == sum(x_ijv[i, j, v] for (i, j) in edges_from_i), name = f'constraint7_{i}_{v}')
 
 # 式9 约束8
 for f in F:  # 遍历每个收集中心 f ∈ F
@@ -171,7 +172,7 @@ for f in F:  # 遍历每个收集中心 f ∈ F
             edges_within_B_f = [(i, j) for (i_j, j) in A if i_j == i and j in B_f and j != i]
             
             # 添加约束：x_{(i,j)}^v 的和为 0
-            model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_within_B_f) == 0)
+            model.addConstr(sum(x_ijv[i, j, v] for (i, j) in edges_within_B_f) == 0, name = f'constraint8_{f}_{i}_{v}')
 
 # 式10 约束9
 for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
@@ -185,7 +186,7 @@ for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
             params.M * (1 - sum(x_ijv[i, j, v] for v in V))
         )
         # 添加约束：左侧 ≤ τ_j
-        model.addConstr(left_hand_side <= tao_i[j])
+        model.addConstr(left_hand_side <= tao_i[j], name = f'constraint9_{i}_{j}')
 
 # 式11 约束10
 for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
@@ -198,11 +199,11 @@ for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
             params.M * (1 - sum(x_ijv[i, j, v] for v in V))  # -M * (1 - Σ_v x_(i,j)^v)
         )
         # 添加约束：左侧 ≤ τ_j
-        model.addConstr(left_hand_side <= tao_i[j])
+        model.addConstr(left_hand_side <= tao_i[j], name = f'constraint10_{i}_{j}')
 
 # 式12 约束11
 for i in N_ALL:  # 遍历所有节点 i ∈ N_all
-    model.addConstr(tao_i[i] <= params.T)
+    model.addConstr(tao_i[i] <= params.T, name = f'constraint11_{i}')
 
 # 式13 约束12
 for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
@@ -210,11 +211,11 @@ for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
         # 计算左侧表达式
         left_hand_side = (
             l_underline_i[i] +  # l_i
-            params.p_i[j] + (params.q_i[j] - delta_i[j]) +  # p_j + (q_j - δ_j)
+            params.p_i[j] + (params.q_i[j] - delta_i[j]) -  # p_j + (q_j - δ_j)
             params.M * (1 - sum(x_ijv[i, j, v] for v in V))  # -M * (1 - Σ_v x_(i,j)^v)
         )
         # 添加约束：左侧 ≤ l_j
-        model.addConstr(left_hand_side <= l_underline_i[j])
+        model.addConstr(left_hand_side <= l_underline_i[j], name = f'constraint12_{i}_{j}')
 
 # 式14 约束13
 for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
@@ -225,7 +226,7 @@ for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
             params.M * (1 - sum(x_ijv[i, j, v] for v in V))  # M * (1 - Σ_v x_(i,j)^v)
         )
         # 添加约束：左侧 ≥ l_j
-        model.addConstr(left_hand_side >= l_underline_i[j])
+        model.addConstr(left_hand_side >= l_underline_i[j], name = f'constraint13_{i}_{j}')
 
 # 式15 约束14
 for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
@@ -236,7 +237,7 @@ for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
             params.M * (1 - sum(x_ijv[i, j, v] for v in V))  # M * (1 - Σ_v x_(i,j)^v)
         )
         # 添加约束：左侧 ≥ l_j
-        model.addConstr(left_hand_side >= l_ba_i[j])
+        model.addConstr(left_hand_side >= l_ba_i[j], name = f'constraint14_{i}_{j}')
 
 # 式16 约束15
 for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
@@ -247,37 +248,33 @@ for (i, j) in A:  # 遍历每条边 (i,j) ∈ A
             params.M * (1 - sum(x_ijv[i, j, v] for v in V))  # -M * (1 - Σ_v x_(i,j)^v)
         )
         # 添加约束：左侧 ≤ l_j
-        model.addConstr(left_hand_side <= l_ba_i[j])
+        model.addConstr(left_hand_side <= l_ba_i[j], name = f'constraint15_{i}_{j}')
 
 # 式17 约束16
 for i in N_ALL:  # 遍历所有节点 i ∈ N_all
-    model.addConstr(l_ba_i[i] + l_underline_i[i] <= params.Q_v)
+    model.addConstr(l_ba_i[i] + l_underline_i[i] <= params.Q_v, name = f'constraint16_{i}')
 
 # 式18 约束17
 for i in N_START:  # 遍历所有节点 i ∈ N_start
-    model.addConstr(l_ba_i[i] + l_underline_i[i] == 0)
+    model.addConstr(l_ba_i[i] + l_underline_i[i] == 0, name = f'constraint17_{i}')
 
 # 式19 约束18
 for j in N_END:
     # 找到所有以 j 为终点的边 (i,j) ∈ A
     edges_to_j = [(i, j) for (i, j_arc) in A if j_arc == j]
-    
     # 计算 sum(l_bar_i + l_underline_i) 并添加约束
-    model.addConstr(sum(l_ba_i[i] + l_underline_i[i] for (i, j) in edges_to_j) == 0)
+    model.addConstr(sum(l_ba_i[i] + l_underline_i[i] for (i, m) in edges_to_j) == 0, name = f'constraint18_{j}')
 
 # 式20 约束19
 for f in F:  # 遍历每个收集中心 f ∈ F
     # 获取 f 对应的虚拟节点集合 B_f
     B_f = FAI[F.index(f)]
     # 约束：Σ_{b_f ∈ B_f} ε_{b_f} ≤ d_f
-    model.addConstr(
-        sum(epsilon_i[b_f] for b_f in B_f) <= params.d_f[f],
-        name=f"collection_center_capacity_f{f}"
-    )
+    model.addConstr(sum(epsilon_i[b_f] for b_f in B_f) <= params.d_f[f],name = f'constraint19_{f}')
 
 # 式21 约束20
 for i in N:  # 遍历每个共享单车站点 i ∈ N
-    model.addConstr(delta_i[i] <= params.q_i[i])
+    model.addConstr(delta_i[i] <= params.q_i[i], name = f'constraint20_{i}')
 
 # 线性化式22中的二次项
 # 定义 y_ij 和 z_ij 的 (i, j) 对集合（其中 i, j ∈ FAI_FLAT）
@@ -293,11 +290,11 @@ for i in FAI_FLAT:
     for j in FAI_FLAT:
         if i != j:
             # y_ij <= theta_i
-            model.addConstr(y_ij[i, j] <= theta_i[i], name=f"y_ij_upper_bound_{i}_{j}")
+            model.addConstr(y_ij[i, j] <= theta_i[i], name = f'constraint30_{i}_{j}')
             # y_ij <= M * eta_ij（M 是一个大常数，例如 params.M）
-            model.addConstr(y_ij[i, j] <= params.M * eta_ij[i, j], name=f"y_ij_eta_bound_{i}_{j}")
+            model.addConstr(y_ij[i, j] <= params.M * eta_ij[i, j], name = f'constraint31_{i}_{j}')
             # y_ij >= theta_i - M * (1 - eta_ij)
-            model.addConstr(y_ij[i, j] >= theta_i[i] - params.M * (1 - eta_ij[i, j]), name=f"y_ij_lower_bound_{i}_{j}")
+            model.addConstr(y_ij[i, j] >= theta_i[i] - params.M * (1 - eta_ij[i, j]), name = f'constraint32_{i}_{j}')
             # y_ij >= 0（已在 addVars 中通过 lb=0 强制执行）
 
 # 线性化约束：z_ij = epsilon_i * eta_ij
@@ -305,38 +302,33 @@ for i in FAI_FLAT:
     for j in FAI_FLAT:
         if i != j:
             # z_ij <= epsilon_i
-            model.addConstr(z_ij[i, j] <= epsilon_i[i], name=f"z_ij_upper_bound_{i}_{j}")
+            model.addConstr(z_ij[i, j] <= epsilon_i[i], name = f'constraint34_{i}_{j}')
             # z_ij <= M * eta_ij
-            model.addConstr(z_ij[i, j] <= params.M * eta_ij[i, j], name=f"z_ij_eta_bound_{i}_{j}")
+            model.addConstr(z_ij[i, j] <= params.M * eta_ij[i, j], name = f'constraint35_{i}_{j}')
             # z_ij >= epsilon_i - M * (1 - eta_ij)
-            model.addConstr(z_ij[i, j] >= epsilon_i[i] - params.M * (1 - eta_ij[i, j]), name=f"z_ij_lower_bound_{i}_{j}")
+            model.addConstr(z_ij[i, j] >= epsilon_i[i] - params.M * (1 - eta_ij[i, j]), name = f'constraint36_{i}_{j}')
             # z_ij >= 0（已在 addVars 中通过 lb=0 强制执行）
 
 
 # 式22 约束21
 for f in F:  # 遍历每个收集中心 f ∈ F
-    # 获取 f 对应的虚拟节点集合 B_f
-    B_f = FAI[F.index(f)]
+    B_f = FAI[F.index(f)]  # 获取 f 对应的虚拟节点集合 B_f
     for j in B_f:  # 遍历每个虚拟节点 j ∈ B_f
-        for i in B_f:
-            if i != j:
-                model.addConstr(params.d_f[f] + y_ij[i, j] - z_ij[i, j] <= params.Q_f)
+        # 对所有 i ∈ B_f 且 i != j 的 y_ij[i, j] - z_ij[i, j] 求和
+        sum_expr = sum(y_ij[i, j] - z_ij[i, j] for i in B_f if i != j)
+        model.addConstr(params.d_f[f] + sum_expr <= params.Q_f, name = f'constraint21_{f}_{j}')
 
 # 式23 约束22
 for i in FAI_FLAT:  # 遍历每个虚拟节点 i ∈ Φ
     for j in FAI_FLAT:  # 遍历每个虚拟节点 j ∈ Φ
         # 约束：τ_i ≤ τ_j + M (1 - n_{i j})
-        model.addConstr(tao_i[i] <= tao_i[j] + params.M * (1 - eta_ij[i, j]))
+        model.addConstr(tao_i[i] <= tao_i[j] + params.M * (1 - eta_ij[i, j]), name = f'constraint22_{i}_{j}')
 
 # 式24 约束23
 for i in FAI_FLAT:  # 遍历每个虚拟节点 i ∈ Φ
     for j in FAI_FLAT:  # 遍历每个虚拟节点 j ∈ Φ
         # 约束：τ_j ≤ τ_i + M n_{i j}
-        model.addConstr(tao_i[j] <= tao_i[i] + params.M * eta_ij[i, j])
-
-
-
-#以下为线性化
+        model.addConstr(tao_i[j] <= tao_i[i] + params.M * eta_ij[i, j], name = f'constraint23_{i}_{j}')
 
 # 线性化约束（式25和式26）
 AUXI1 = [(i, s) for i in N for s in S] # 定义辅助变量集合 AUXI1
@@ -345,89 +337,83 @@ AUXI2 = [(i, s) for i in N for s in S] # 定义辅助变量集合 AUXI2
 auxi1 = model.addVars(AUXI1, vtype=GRB.BINARY, name='auxi1')
 auxi2 = model.addVars(AUXI2, vtype=GRB.BINARY, name='auxi2')
 
-# 约束39
+# 式39 约束38
 for i in N:  # 遍历所有节点 i ∈ N
     for s in S:  # 遍历所有时间段 s ∈ S
         model.addConstr(
             tao_i[i] <= (s-1) * params.sigma_s + params.M * auxi1[i, s],
-            name=f"constraint_39_{i}_{s}"
+            name=f"constraint_38_{i}_{s}"
         )
 
-# 式40
+# 式40 约束39
 for i in N:  # 遍历所有节点 i ∈ N
     for s in S:  # 遍历所有时间段 s ∈ S
         model.addConstr(
             tao_i[i] >= (s-1) * params.sigma_s - params.M * (1 - auxi1[i, s]),
-            name=f"constraint_40_{i}_{s}"
+            name=f"constraint_39_{i}_{s}"
         )
-# 式41
+# 式41 约束40
 for i in N:  # 遍历所有节点 i ∈ N
     for s in S:  # 遍历所有时间段 s ∈ S
         model.addConstr(
             tao_i[i] >= s * params.sigma_s - params.M * (1 - auxi1[i, s]),
-            name=f"constraint_41_{i}_{s}"
+            name=f"constraint_40_{i}_{s}"
         )
 
-# 式42
+# 式42 约束41
 for i in N:  # 遍历所有节点 i ∈ N
     for s in S:  # 遍历所有时间段 s ∈ S
         model.addConstr(
             tao_i[i] <= s * params.sigma_s + params.M * auxi1[i, s],
-            name=f"constraint_42_{i}_{s}"
+            name=f"constraint_41_{i}_{s}"
         )
 
-# 式43
+# 式43 约束42
 for i in N:
     for s in S:
         model.addConstr(
             lamda_is[i, s] >= auxi1[i, s] +auxi2[i, s] - 1,
-            name=f"constraint_43_{i}_{s}"
+            name=f"constraint_42_{i}_{s}"
         )
 
-# 式44
+# 式44 约束43
 for i in N:
     for s in S:
         model.addConstr(
             lamda_is[i, s] <= auxi1[i, s],
-            name=f"constraint_44_{i}_{s}"
+            name=f"constraint_43_{i}_{s}"
         )
 
-# 式45
+# 式45 约束44
 for i in N:
     for s in S:
         model.addConstr(
             lamda_is[i, s] <= auxi2[i, s],
-            name=f"constraint_45_{i}_{s}"
+            name=f"constraint_44_{i}_{s}"
         )
 
+# 式26 约束25
+for i in N:
+    model.addConstr(quicksum(lamda_is[i, s] for s in S) == 1, name = f'constraint25_{i}')
 
-# 线性化约束（式46）
+# 线性化约束
 K = [(i, s) for i in N for s in S] # 定义辅助变量集合 K
 k = model.addVars(K, vtype=GRB.INTEGER, lb=0, name='k')
 
-# 式46
+# 式46 约束45
 for i in N:
     for s in S:
-        model.addConstr(
-            k[i, s] <= delta_i[i],
-            name=f"constraint_46_{i}_{s}"
-        )
+        model.addConstr(k[i, s] <= delta_i[i], name = f"constraint45_{i}_{s}")
 
-# 式47
+# 式47 约束46
 for i in N:
     for s in S:
-        model.addConstr(
-            k[i, s] <= params.M * lamda_is[i, s],
-            name=f"constraint_47_{i}_{s}"
-        )
+        model.addConstr(k[i, s] <= params.M * lamda_is[i, s], name=f"constraint46_{i}_{s}")
 
-# 式48
+# 式48 约束47
 for i in N:
     for s in S:
-        model.addConstr(
-            k[i, s] >= delta_i[i] - params.M * (1 - lamda_is[i, s]),
-            name=f"constraint_48_{i}_{s}"
-        )
+        model.addConstr(k[i, s] >= delta_i[i] - params.M * (1 - lamda_is[i, s]),name=f"constraint47_{i}_{s}")
 
 # 约束 (50)：k >= 0
 # 已经在 addVars 中通过 lb=0 强制执行，无需额外添加
@@ -436,7 +422,7 @@ for i in N:
 # 定义目标函数
 # 第一部分：∑_{i∈N} ∑_{s∈S} α_is * λ_is * (δ_i + h_i)
 term1 = quicksum(
-    params.afa_i_s[i, s] * lamda_is[i, s] * params.h_i[i] + params.afa_i_s[i, s] * params.h_i[i]
+    params.afa_i_s[i, s] * lamda_is[i, s] * params.h_i[i] + params.afa_i_s[i, s] * k[i, s]
     for i in N
     for s in S
 )

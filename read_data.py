@@ -33,11 +33,11 @@ class Parameters:
         self.sigma_q = 5  # Average pick up/drop off time
         self.sigma_p = 10  # Average repair time on the road
         self.sigma_s = 60  # Time length of each time slot
-        self.d_f = {10: 15, 11: 15, 12: 15}  # Number of repaired bikes in collection center f
-        self.h_i = {0: 15, 1: 10, 2: 5, 3: 10, 4: 8, 5: 6, 6: 5, 7: 3, 8: 2, 9:2}  # Number of repaired bikes to return to station i
-        self.p_i = {0: 15, 1: 10, 2: 5, 3: 10, 4: 8, 5: 6, 6: 5, 7: 3, 8: 2, 9:2}   # Number of broken shared bikes that must be returned to collection centers for repair at station i
-        self.q_i = {0: 15, 1: 10, 2: 5, 3: 10, 4: 8, 5: 6, 6: 5, 7: 3, 8: 2, 9:2}   # Number of broken shared bikes that can be repaired directly on the road at station i
-        self.T = 8  # Maximum operating duration
+        self.d_f = {10: 4, 11: 3, 12: 3}  # Number of repaired bikes in collection center f
+        self.h_i = {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9:1}  # Number of repaired bikes to return to station i
+        self.p_i = {0: 5, 1: 5, 2: 5, 3: 5, 4: 5, 5: 5, 6: 5, 7: 5, 8: 5, 9:5}   # Number of broken shared bikes that must be returned to collection centers for repair at station i
+        self.q_i = {0: 5, 1: 5, 2: 5, 3: 5, 4: 5, 5: 5, 6: 5, 7: 5, 8: 5, 9:5}   # Number of broken shared bikes that can be repaired directly on the road at station i
+        self.T = 8000  # Maximum operating duration
         self.M = 1000000  # A large number
         self.V = 10 # Speed of the worker's truck
 
@@ -76,7 +76,6 @@ class Parameters:
             for s in range(len(matrix[0])):
                 self.afa_i_s[(s, i)] = round(3 * matrix[i][s], 2) # 保留两位小数
                 self.bta_i_s[(s, i)] = round(1 * matrix[i][s], 2) # 保留两位小数
-
 
     def print_parameters(self):
         # 打印所有参数及其值
