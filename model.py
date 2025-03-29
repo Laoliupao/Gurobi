@@ -464,45 +464,22 @@ model.optimize()
 
 
 
-# 打开一个文件用于记录 IIS 分析结果
-with open("infeasibility_analysis.txt", "w", encoding="utf-8") as f:
-    f.write("Gurobi 不可行约束分析结果\n")
-    f.write("==========================\n\n")
 
-    # 1. 输出求解状态
-    f.write("1. 求解状态\n")
-    f.write("------------\n")
-    if model.status == GRB.OPTIMAL:
-        f.write("最优解已找到！\n")
-        f.write(f"目标函数值: {model.objVal}\n")
-    elif model.status == GRB.INFEASIBLE:
-        f.write("模型无解（不可行）。\n")
-        # 计算 IIS 并写入文件
-        f.write("正在计算不可行约束（IIS）...\n")
-        model.computeIIS()  # 计算不可行约束集
-        model.write("model.ilp")  # 将 IIS 写入单独的文件
-        f.write("不可行约束已写入 'model.ilp' 文件。\n")
-        # 读取 model.ilp 文件并将其内容写入 infeasibility_analysis.txt
-        try:
-            with open("model.ilp", "r", encoding="utf-8") as ilp_file:
-                ilp_content = ilp_file.read()
-                f.write("\n不可行约束（IIS）内容：\n")
-                f.write("------------------------\n")
-                f.write(ilp_content)
-                f.write("\n")
-        except Exception as e:
-            f.write(f"无法读取 model.ilp 文件，错误：{str(e)}\n")
-    elif model.status == GRB.UNBOUNDED:
-        f.write("模型无界。\n")
-    elif model.status == GRB.TIME_LIMIT:
-        f.write("达到时间限制，求解未完成。\n")
-        if model.SolCount > 0:
-            f.write(f"找到的可行解目标值: {model.objVal}\n")
-    else:
-        f.write(f"求解状态: {model.status}\n")
-    f.write("\n")
+# 检查模型状态并生成 IIS（如果不可行）
+if model.status == GRB.INFEASIBLE:
+    print("模型不可行，正在计算 IIS...")
+    model.computeIIS()  # 计算 IIS
+    # 将 IIS 输出为 .ilp 文件
+    model.write("bike_sharing_iis.ilp")
+    print("IIS 已保存至 'bike_sharing_iis.ilp' 文件")
+elif model.status == GRB.OPTIMAL:
+    print("模型已找到最优解")
+    print(f"目标函数值: {model.objVal}")
+elif model.status == GRB.TIME_LIMIT:
+    print("求解达到时间限制")
+else:
+    print(f"模型状态: {model.status}")
 
-print("IIS save to 'infeasibility_analysis.txt'.")
 
 
 
