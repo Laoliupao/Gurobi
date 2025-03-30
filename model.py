@@ -465,7 +465,7 @@ model.optimize()
 
 # 检查模型是否不可行
 if model.Status == GRB.INFEASIBLE:
-    #print('The model is not feasible and IIS is being calculated.')  
+    print('The model is not feasible and IIS is being calculated.')  
     # 计算不可行性不可约子集（IIS）
     model.computeIIS()
     
